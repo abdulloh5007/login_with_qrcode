@@ -1,28 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Smartphone, Monitor, Tablet, Trash2, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useAuth } from '@/hooks/use-auth';
+import { db } from '@/lib/firebase';
+import { collection, query, where, onSnapshot, doc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { formatDistanceToNow } from 'date-fns';
+import { ru } from 'date-fns/locale';
 
 type Device = {
   id: string;
-  type: 'mobile' | 'desktop' | 'tablet';
-  name: string;
-  lastSeen: string;
+  userAgent: string;
+  createdAt: {
+    seconds: number;
+    nanoseconds: number;
+  };
   isCurrent: boolean;
 };
 
-const mockDevices: Device[] = [
-  { id: '1', type: 'desktop', name: 'Chrome on Windows', lastSeen: 'Сейчас', isCurrent: true },
-  { id: '2', type: 'mobile', name: 'iPhone 15 Pro', lastSeen: '2 часа назад', isCurrent: false },
-  { id: '3', type: 'tablet', name: 'iPad Air', lastSeen: '1 день назад', isCurrent: false },
-  { id: '4', type: 'desktop', name: 'Safari on macOS', lastSeen: '3 дня назад', isCurrent: false },
-];
+const getDeviceType = (userAgent: string): 'mobile' | 'desktop' | 'tablet' => {
+    if (/mobile/i.test(userAgent)) return 'mobile';
+    if (/tablet/i.test(userAgent)) return 'tablet';
+    return 'desktop';
+};
 
-const getDeviceIcon = (type: Device['type']) => {
+const getDeviceIcon = (type: 'mobile' | 'desktop' | 'tablet') => {
   switch (type) {
     case 'mobile':
       return <Smartphone className="h-6 w-6 text-muted-foreground" />;
@@ -34,69 +40,70 @@ const getDeviceIcon = (type: Device['type']) => {
 };
 
 export default function DeviceManager() {
-  const [devices, setDevices] = useState(mockDevices);
+  const { user, currentSessionId } = useAuth();
+  const [devices, setDevices] = useState<Device[]>([]);
 
-  const handleTerminateSession = (id: string) => {
-    setDevices(devices.filter((device) => device.id !== id));
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(collection(db, `users/${user.uid}/sessions`));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const userDevices: Device[] = [];
+      querySnapshot.forEach((doc) => {
+        userDevices.push({
+          id: doc.id,
+          ...doc.data(),
+          isCurrent: doc.id === currentSessionId
+        } as Device);
+      });
+      setDevices(userDevices.sort((a, b) => b.createdAt.seconds - a.createdAt.seconds));
+    });
+
+    return () => unsubscribe();
+  }, [user, currentSessionId]);
+
+  const handleTerminateSession = async (sessionId: string) => {
+    if (!user) return;
+    const sessionRef = doc(db, `users/${user.uid}/sessions`, sessionId);
+    await deleteDoc(sessionRef);
   };
 
-  const handleTerminateAllOtherSessions = () => {
-    setDevices(devices.filter((device) => device.isCurrent));
+  const handleTerminateAllOtherSessions = async () => {
+    if (!user || !currentSessionId) return;
+    const batch = writeBatch(db);
+    devices
+      .filter((device) => !device.isCurrent)
+      .forEach((device) => {
+        const sessionRef = doc(db, `users/${user.uid}/sessions`, device.id);
+        batch.delete(sessionRef);
+      });
+    await batch.commit();
   };
+  
+  const currentDevice = devices.find(d => d.isCurrent);
+  const otherDevices = devices.filter(d => !d.isCurrent);
+
 
   return (
     <div className="w-full space-y-6 pt-4">
-      <ul className="space-y-4">
-        {devices.map((device) => (
-          <li key={device.id}>
-            <Card className={`transition-all ${device.isCurrent ? 'border-primary' : ''}`}>
+      {currentDevice && (
+          <div>
+            <Card className='border-primary'>
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  {getDeviceIcon(device.type)}
+                  {getDeviceIcon(getDeviceType(currentDevice.userAgent))}
                   <div>
-                    <p className="font-semibold text-foreground">{device.name}</p>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      {device.isCurrent ? (
-                        <>
-                          <ShieldCheck className="h-4 w-4 text-green-500" />
-                          <span>Текущий сеанс</span>
-                        </>
-                      ) : (
-                        <span>Последний раз: {device.lastSeen}</span>
-                      )}
+                    <p className="font-semibold text-foreground">{currentDevice.userAgent}</p>
+                    <div className="flex items-center gap-2 text-sm text-green-500">
+                        <ShieldCheck className="h-4 w-4" />
+                        <span>Текущий сеанс</span>
                     </div>
                   </div>
                 </div>
-                {!device.isCurrent && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Это действие приведет к выходу из сеанса на устройстве '{device.name}'. Это действие нельзя отменить.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Отмена</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleTerminateSession(device.id)}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          Завершить сеанс
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
               </CardContent>
             </Card>
-            {device.isCurrent && (
-                <div className="mt-6 flex flex-col items-center gap-2">
+            {otherDevices.length > 0 && (
+                 <div className="mt-6 flex flex-col items-center gap-2">
                     <Separator />
                      <p className="text-sm text-muted-foreground text-center max-w-xs pt-6">
                         Если вы не узнаете какое-либо устройство, вы можете завершить все остальные сеансы для безопасности.
@@ -128,6 +135,51 @@ export default function DeviceManager() {
                     </AlertDialog>
                 </div>
             )}
+            {otherDevices.length > 0 && <Separator className='my-6'/>}
+          </div>
+      )}
+      <ul className="space-y-4">
+        {otherDevices.map((device) => (
+          <li key={device.id}>
+            <Card>
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  {getDeviceIcon(getDeviceType(device.userAgent))}
+                  <div>
+                    <p className="font-semibold text-foreground">{device.userAgent}</p>
+                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>
+                            {formatDistanceToNow(new Date(device.createdAt.seconds * 1000), { addSuffix: true, locale: ru })}
+                        </span>
+                    </div>
+                  </div>
+                </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Это действие приведет к выходу из сеанса на устройстве '{device.userAgent}'. Это действие нельзя отменить.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Отмена</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleTerminateSession(device.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Завершить сеанс
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+              </CardContent>
+            </Card>
           </li>
         ))}
       </ul>

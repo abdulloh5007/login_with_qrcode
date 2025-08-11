@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
@@ -9,24 +8,28 @@ import { Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function LoginQrCode() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const router = useRouter();
-
+  const { loginWithToken } = useAuth();
+  
   const loginRequestToken = useRef(uuidv4()).current;
 
   useEffect(() => {
     const createLoginRequest = async () => {
       try {
+        const qrContent = JSON.stringify({ token: loginRequestToken });
         await setDoc(doc(db, 'loginRequests', loginRequestToken), {
           status: 'pending',
           createdAt: new Date(),
+          token: loginRequestToken
         });
         
         if (canvasRef.current) {
-          QRCode.toCanvas(canvasRef.current, loginRequestToken, {
+          QRCode.toCanvas(canvasRef.current, qrContent, {
             width: 256,
             margin: 2,
             color: {
@@ -45,8 +48,9 @@ export default function LoginQrCode() {
 
     const unsub = onSnapshot(doc(db, "loginRequests", loginRequestToken), (doc) => {
         const data = doc.data();
-        if (data && data.status === 'authorized') {
+        if (data && data.status === 'authorized' && data.authorizedBy) {
             setIsAuthorized(true);
+            loginWithToken(data.authorizedBy, loginRequestToken);
             unsub(); 
         }
     });
@@ -54,15 +58,13 @@ export default function LoginQrCode() {
     return () => {
         unsub();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loginRequestToken]);
 
 
   useEffect(() => {
     if (isAuthorized) {
-        // Once authorized, redirect to the dashboard.
         setTimeout(() => {
-            // Here you would typically handle the actual login, e.g., set a cookie/session.
-            // For now, we'll just redirect.
             router.push('/dashboard');
         }, 1500);
     }

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -7,6 +6,7 @@ import { Loader2, CheckCircle, CameraOff } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
 
 interface QrScannerProps {
@@ -22,11 +22,31 @@ export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerPro
   const [scanSuccess, setScanSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
 
-  const handleAuthorizeToken = async (token: string) => {
+  const handleAuthorizeToken = async (qrData: string) => {
     setLoading(true);
+    let token;
     try {
+        const parsedData = JSON.parse(qrData);
+        token = parsedData.token;
+        if (!token) throw new Error("Invalid QR data");
+    } catch (e) {
+        setError('Неверный формат QR-кода.');
+        toast({
+            variant: 'destructive',
+            title: 'Неверный QR-код',
+            description: 'Этот QR-код недействителен.',
+        });
+        setLoading(false);
+        return;
+    }
+
+    try {
+        if (!user) {
+            throw new Error("User not authenticated");
+        }
         const docRef = doc(db, "loginRequests", token);
         const docSnap = await getDoc(docRef);
 
@@ -34,8 +54,7 @@ export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerPro
             await updateDoc(docRef, {
                 status: "authorized",
                 authorizedAt: new Date(),
-                // In a real app, you'd also save which user authorized it.
-                // authorizedBy: auth.currentUser.uid 
+                authorizedBy: user.uid,
             });
             setScanSuccess(true);
             if (onScanSuccess) {
@@ -108,7 +127,6 @@ export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerPro
           }
           cancelAnimationFrame(animationFrameId);
 
-          // Once a QR code is found, try to authorize it.
           handleAuthorizeToken(code.data);
           
           return;

@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import Link from 'next/link';
 import { Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
 
 const checkPasswordStrength = (password: string): {level: number, has: {[key: string]: boolean}} => {
     let typesCount = 0;
@@ -81,16 +83,36 @@ const PasswordStrengthIndicator = ({ strength }: { strength: {level: number, has
 
 export default function RegisterForm() {
   const router = useRouter();
+  const { register } = useAuth();
+  const { toast } = useToast();
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordStrength, setPasswordStrength] = useState({ level: 0, has: {} });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock register logic
-    router.push('/dashboard');
+    if (password !== confirmPassword) {
+      toast({
+        variant: 'destructive',
+        title: 'Ошибка регистрации',
+        description: 'Пароли не совпадают.',
+      });
+      return;
+    }
+    try {
+      await register(email, password);
+      router.push('/dashboard');
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Ошибка регистрации',
+        description: error.message,
+      });
+    }
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,7 +128,7 @@ export default function RegisterForm() {
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
             <Label htmlFor="email">Эл. почта</Label>
-            <Input id="email" type="email" placeholder="m@example.com" required />
+            <Input id="email" type="email" placeholder="m@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Пароль</Label>
@@ -133,7 +155,13 @@ export default function RegisterForm() {
            <div className="space-y-2">
             <Label htmlFor="confirm-password">Подтвердите пароль</Label>
              <div className="relative">
-                <Input id="confirm-password" type={showConfirmPassword ? "text" : "password"} required />
+                <Input 
+                  id="confirm-password" 
+                  type={showConfirmPassword ? "text" : "password"} 
+                  required 
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
                  <Button
                     type="button"
                     variant="ghost"
