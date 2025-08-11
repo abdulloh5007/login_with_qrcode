@@ -1,39 +1,69 @@
+
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import jsQR from 'jsqr';
 import { Loader2, CheckCircle, CameraOff } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { useToast } from '@/hooks/use-toast';
+
 
 interface QrScannerProps {
-    onScanSuccess: (data: string) => void;
+    onScanSuccess?: (data: string) => void;
     onDialogClose?: () => void;
 }
 
 export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerProps) {
-  const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading, setLoading] = useState(true);
   const [qrCodeBox, setQrCodeBox] = useState<{ x: number; y: number; width: number; height: number; } | null>(null);
   const [scanSuccess, setScanSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [scannedData, setScannedData] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  useEffect(() => {
-    if (scanSuccess && scannedData) {
-        // Logic to authorize the device with the scannedData token.
-        // For demonstration, we'll just show success and close the dialog/redirect.
-        console.log("Authorizing device with token:", scannedData);
-        setTimeout(() => {
-            if (onDialogClose) {
-                onDialogClose();
+
+  const handleAuthorizeToken = async (token: string) => {
+    setLoading(true);
+    try {
+        const docRef = doc(db, "loginRequests", token);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists() && docSnap.data().status === 'pending') {
+            await updateDoc(docRef, {
+                status: "authorized",
+                authorizedAt: new Date(),
+                // In a real app, you'd also save which user authorized it.
+                // authorizedBy: auth.currentUser.uid 
+            });
+            setScanSuccess(true);
+            if (onScanSuccess) {
+                onScanSuccess(token);
             }
-            // For a real app, you might not redirect the scanning device,
-            // but for now we'll just confirm it worked.
-        }, 1500);
+             setTimeout(() => {
+                if (onDialogClose) onDialogClose();
+            }, 1500);
+        } else {
+             toast({
+                variant: 'destructive',
+                title: 'Неверный QR-код',
+                description: 'Этот QR-код недействителен или уже был использован.',
+            });
+            setError('Неверный или просроченный QR-код.');
+        }
+    } catch (err) {
+        console.error("Error authorizing token:", err);
+        setError("Произошла ошибка при авторизации. Попробуйте снова.");
+        toast({
+            variant: 'destructive',
+            title: 'Ошибка сервера',
+            description: 'Не удалось авторизовать устройство. Пожалуйста, попробуйте позже.',
+        });
+    } finally {
+        setLoading(false);
     }
-  }, [scanSuccess, scannedData, onDialogClose, router]);
+  }
 
 
   useEffect(() => {
@@ -64,9 +94,7 @@ export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerPro
         });
 
         if (code && code.data) {
-          onScanSuccess(code.data);
-          setScannedData(code.data);
-
+          
           const qrBox = {
               x: code.location.topLeftCorner.x,
               y: code.location.topLeftCorner.y,
@@ -75,11 +103,14 @@ export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerPro
           };
           setQrCodeBox(qrBox);
 
-          setScanSuccess(true);
           if (stream) {
             stream.getTracks().forEach(track => track.stop());
           }
           cancelAnimationFrame(animationFrameId);
+
+          // Once a QR code is found, try to authorize it.
+          handleAuthorizeToken(code.data);
+          
           return;
         } else {
             setQrCodeBox(null);
@@ -96,7 +127,7 @@ export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerPro
         if (video) {
           video.srcObject = stream;
           video.setAttribute('playsinline', 'true');
-          video.play();
+          await video.play();
           animationFrameId = requestAnimationFrame(tick);
         }
       } catch (err) {
@@ -116,11 +147,12 @@ export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerPro
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [scanSuccess, onScanSuccess]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanSuccess]);
 
   return (
     <div className="relative w-full aspect-square bg-muted rounded-lg overflow-hidden flex items-center justify-center mt-6">
-      {loading && <Loader2 className="animate-spin text-primary" size={48} />}
+      {loading && !scanSuccess && <Loader2 className="animate-spin text-primary" size={48} />}
       
       <video ref={videoRef} className={`w-full h-full object-cover transition-opacity duration-300 ${loading || scanSuccess || error ? 'opacity-0' : 'opacity-100'}`} />
       <canvas ref={canvasRef} className="hidden" />
@@ -149,7 +181,7 @@ export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerPro
       {error && !loading && (
           <div className="absolute inset-0 bg-muted flex flex-col items-center justify-center p-4 text-center">
               <CameraOff className="text-destructive mb-4" size={48} />
-              <p className="text-destructive font-semibold">Ошибка камеры</p>
+              <p className="text-destructive font-semibold">Ошибка сканирования</p>
               <p className="text-sm text-muted-foreground">{error}</p>
           </div>
       )}

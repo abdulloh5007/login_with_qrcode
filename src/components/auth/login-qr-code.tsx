@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
@@ -5,55 +6,53 @@ import QRCode from 'qrcode';
 import { Card } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-
-// In a real app, you would use a library like `pusher-js` or native WebSockets
-// to listen for an authentication event from the server.
-const MOCK_WEBSOCKET_DELAY = 2000; // ms
+import { db } from '@/lib/firebase';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { v4 as uuidv4 } from 'uuid';
 
 export default function LoginQrCode() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const router = useRouter();
 
-  // This token would be generated and stored temporarily in your backend.
-  const loginRequestToken = `login-request-${Date.now()}-${Math.random()}`;
+  const loginRequestToken = useRef(uuidv4()).current;
 
   useEffect(() => {
-    if (canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, loginRequestToken, { 
-        width: 256,
-        margin: 2,
-        color: {
-            dark: '#000000',
-            light: '#FFFFFF' 
+    const createLoginRequest = async () => {
+      try {
+        await setDoc(doc(db, 'loginRequests', loginRequestToken), {
+          status: 'pending',
+          createdAt: new Date(),
+        });
+        
+        if (canvasRef.current) {
+          QRCode.toCanvas(canvasRef.current, loginRequestToken, {
+            width: 256,
+            margin: 2,
+            color: {
+              dark: '#000000',
+              light: '#FFFFFF',
+            },
+          }, (error) => {
+            if (error) console.error('QR Code Generation Error:', error);
+          });
         }
-      }, (error) => {
-        if (error) console.error(error);
-      });
-    }
-  }, [loginRequestToken]);
-
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-
-    // This simulates a WebSocket or polling connection listening for the "authorization" event
-    // after another device has scanned the QR code.
-    const listenForAuthorization = () => {
-      console.log(`Listening for authorization for token: ${loginRequestToken}`);
-      
-      // MOCK: Pretend we received an auth message after a delay.
-      timeoutId = setTimeout(() => {
-         // In a real app, the server would confirm this token was authorized.
-         console.log(`Token ${loginRequestToken} has been authorized.`);
-         setIsAuthorized(true);
-      }, MOCK_WEBSOCKET_DELAY + Math.random() * 3000); // Add jitter
+      } catch (error) {
+        console.error("Error creating login request:", error);
+      }
     };
+    createLoginRequest();
 
-    // Start listening when the component mounts
-    listenForAuthorization();
+    const unsub = onSnapshot(doc(db, "loginRequests", loginRequestToken), (doc) => {
+        const data = doc.data();
+        if (data && data.status === 'authorized') {
+            setIsAuthorized(true);
+            unsub(); 
+        }
+    });
 
     return () => {
-      clearTimeout(timeoutId);
+        unsub();
     }
   }, [loginRequestToken]);
 
@@ -62,6 +61,8 @@ export default function LoginQrCode() {
     if (isAuthorized) {
         // Once authorized, redirect to the dashboard.
         setTimeout(() => {
+            // Here you would typically handle the actual login, e.g., set a cookie/session.
+            // For now, we'll just redirect.
             router.push('/dashboard');
         }, 1500);
     }
@@ -80,6 +81,12 @@ export default function LoginQrCode() {
             <div className="flex items-center gap-2 text-green-600">
                 <Loader2 className="animate-spin h-4 w-4" />
                 <p className="font-semibold">Авторизация успешна! Перенаправление...</p>
+            </div>
+        )}
+         {!isAuthorized && (
+             <div className="flex items-center gap-2 text-muted-foreground pt-4">
+                <Loader2 className="animate-spin h-4 w-4" />
+                <p>Ожидание сканирования...</p>
             </div>
         )}
     </div>

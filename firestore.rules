@@ -1,0 +1,19 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Allow reading and writing to loginRequests for any user.
+    // In a production app, you would want to restrict this more,
+    // for example, only allowing authorized users to update the status.
+    match /loginRequests/{requestId} {
+      allow read, write: if true; 
+    }
+
+    // Lock down all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
