@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, setDoc, deleteDoc, onSnapshot, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -68,36 +68,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
 
   const handleSignOut = useCallback(async () => {
+    const userToClean = auth.currentUser;
+    const sessionToClean = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    await cleanupSession(userToClean, sessionToClean);
     await signOut(auth);
+    // onAuthStateChanged will handle setting user and sessionId to null
   }, []);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (newUser) => {
+        setUser(newUser);
         if (newUser) {
-            setUser(newUser);
-            let sessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
-            
-            if (sessionId) {
-                // Verify session exists and belongs to this user
-                const sessionRef = doc(db, `users/${newUser.uid}/sessions`, sessionId);
-                const sessionSnap = await getDoc(sessionRef);
-                if (!sessionSnap.exists()) {
-                    sessionId = null; // Session is invalid, create a new one
-                }
-            }
-
-            if (!sessionId) {
-                // This is a new login or the previous session was invalid
-                const newSessionId = await createSession(newUser);
-                setCurrentSessionId(newSessionId);
-            } else {
-                setCurrentSessionId(sessionId);
-            }
-
+             // On initial load or refresh, get session from storage
+            const sessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
+            setCurrentSessionId(sessionId);
         } else {
-            // User signed out
-            await cleanupSession(user, currentSessionId);
-            setUser(null);
+            // User signed out, clear local state
             setCurrentSessionId(null);
             const protectedRoutes = ['/dashboard'];
             if(protectedRoutes.some(path => window.location.pathname.startsWith(path))) {
@@ -130,8 +116,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user, currentSessionId, handleSignOut]);
 
   const login = async (email: string, pass: string) => {
-    // Session creation is now handled by onAuthStateChanged
-    await signInWithEmailAndPassword(auth, email, pass);
+    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    const newSessionId = await createSession(userCredential.user);
+    setCurrentSessionId(newSessionId);
   };
   
   const register = async (email: string, pass: string) => {
@@ -140,11 +127,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email: userCredential.user.email,
         createdAt: serverTimestamp()
      });
-     // Session creation is handled by onAuthStateChanged
+     const newSessionId = await createSession(userCredential.user);
+     setCurrentSessionId(newSessionId);
   };
 
   const logout = useCallback(async () => {
-    // handleSignOut will trigger onAuthStateChanged, which handles cleanup
     await handleSignOut();
   }, [handleSignOut]);
   
