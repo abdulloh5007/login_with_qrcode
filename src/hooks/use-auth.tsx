@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, onSnapshot, serverTimestamp, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -20,12 +20,29 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const SESSION_STORAGE_KEY = 'currentSessionId';
 
+const getIpAddress = async (): Promise<string> => {
+    try {
+        const response = await fetch('https://api.ipify.org?format=json');
+        if (!response.ok) {
+            throw new Error('Failed to fetch IP');
+        }
+        const data = await response.json();
+        return data.ip;
+    } catch (error) {
+        console.error("Could not fetch IP address:", error);
+        return "N/A";
+    }
+}
+
 const createSession = async (user: User): Promise<string> => {
     const sessionId = uuidv4();
     const sessionRef = doc(db, `users/${user.uid}/sessions`, sessionId);
+    const ipAddress = await getIpAddress();
+    
     await setDoc(sessionRef, {
         createdAt: serverTimestamp(),
         userAgent: navigator.userAgent,
+        ipAddress: ipAddress,
     });
     sessionStorage.setItem(SESSION_STORAGE_KEY, sessionId);
     return sessionId;
@@ -50,16 +67,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const router = useRouter();
 
+  const handleSignOut = useCallback(async () => {
+    await signOut(auth);
+    // onAuthStateChanged will handle state cleanup
+  }, []);
+
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (newUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (newUser) => {
+        setLoading(true);
         setUser(newUser);
 
         if (newUser) {
-            // User is signed in.
-            const sessionIdFromStorage = sessionStorage.getItem(SESSION_STORAGE_KEY);
-            setCurrentSessionId(sessionIdFromStorage);
+            let sessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
+            if (sessionId) {
+                // Verify session exists
+                const sessionRef = doc(db, `users/${newUser.uid}/sessions`, sessionId);
+                const sessionSnap = await getDoc(sessionRef);
+                if (!sessionSnap.exists()) {
+                    sessionId = null; // Session is invalid
+                }
+            }
+            setCurrentSessionId(sessionId);
         } else {
-            // User is signed out.
             setCurrentSessionId(null);
             sessionStorage.removeItem(SESSION_STORAGE_KEY);
             const protectedRoutes = ['/dashboard'];
@@ -75,27 +104,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     let unsubscribeSession: (() => void) | null = null;
-
     if (user && currentSessionId) {
         const sessionRef = doc(db, `users/${user.uid}/sessions`, currentSessionId);
         unsubscribeSession = onSnapshot(sessionRef, (doc) => {
             if (!doc.exists()) {
-                // The session was deleted from another device.
-                signOut(auth);
+                // Session was terminated remotely
+                handleSignOut();
             }
         });
     }
-
     return () => {
         if (unsubscribeSession) {
             unsubscribeSession();
         }
     };
-  }, [user, currentSessionId]);
+  }, [user, currentSessionId, handleSignOut]);
 
   const login = async (email: string, pass: string) => {
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-    await createSession(userCredential.user);
+    const newSessionId = await createSession(userCredential.user);
+    setCurrentSessionId(newSessionId);
   };
   
   const register = async (email: string, pass: string) => {
@@ -104,14 +132,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email: userCredential.user.email,
         createdAt: serverTimestamp()
      });
-     await createSession(userCredential.user);
+     const newSessionId = await createSession(userCredential.user);
+     setCurrentSessionId(newSessionId);
   };
 
   const logout = useCallback(async () => {
     await cleanupSession(user, currentSessionId);
-    await signOut(auth);
-    // onAuthStateChanged will handle the state updates
-  }, [user, currentSessionId]);
+    await handleSignOut();
+  }, [user, currentSessionId, handleSignOut]);
   
   const value = {
     user,

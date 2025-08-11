@@ -15,6 +15,7 @@ import { ru } from 'date-fns/locale';
 type Device = {
   id: string;
   userAgent: string;
+  ipAddress?: string;
   createdAt: {
     seconds: number;
     nanoseconds: number;
@@ -102,6 +103,11 @@ export default function DeviceManager() {
     await batch.commit();
   }
 
+  const renderDeviceName = (device: Device) => {
+    const name = parseUserAgent(device.userAgent);
+    return device.ipAddress ? `${name} - ${device.ipAddress}` : name;
+  };
+
   return (
     <div className="w-full space-y-6 pt-4">
         {currentDevice && (
@@ -112,7 +118,7 @@ export default function DeviceManager() {
                 <div className="flex items-center gap-4">
                   {getDeviceIcon(getDeviceType(currentDevice.userAgent))}
                   <div>
-                    <p className="font-semibold text-foreground">{parseUserAgent(currentDevice.userAgent)}</p>
+                    <p className="font-semibold text-foreground">{renderDeviceName(currentDevice)}</p>
                     <div className="flex items-center gap-2 text-sm text-green-500">
                         <ShieldCheck className="h-4 w-4" />
                         <span>Это устройство</span>
@@ -125,36 +131,36 @@ export default function DeviceManager() {
         )}
 
       {otherDevices.length > 0 && (
-        <>
-            <div className="flex justify-end">
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button variant="destructive" className="w-full max-w-xs">
-                            Завершить все другие сеансы
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                        Это действие приведет к выходу из всех других сеансов. Вам нужно будет снова войти на этих устройствах.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Отмена</AlertDialogCancel>
-                        <AlertDialogAction
-                        onClick={handleTerminateAllOtherSessions}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                        Завершить сеансы
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            </div>
-            <Separator className='my-6'/>
-        </>
+        <div className="pt-4">
+            <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="w-full max-w-xs mx-auto flex">
+                        Завершить все другие сеансы
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                    Это действие приведет к выходу из всех других сеансов. Вам нужно будет снова войти на этих устройствах.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Отмена</AlertDialogCancel>
+                    <AlertDialogAction
+                    onClick={handleTerminateAllOtherSessions}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                    Завершить сеансы
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </div>
       )}
+      
+      {(currentDevice && otherDevices.length > 0) && <Separator className='my-6'/>}
+
 
       {otherDevices.length > 0 && (
         <div>
@@ -167,7 +173,7 @@ export default function DeviceManager() {
                         <div className="flex items-center gap-4">
                         {getDeviceIcon(getDeviceType(device.userAgent))}
                         <div>
-                            <p className="font-semibold text-foreground">{parseUserAgent(device.userAgent)}</p>
+                            <p className="font-semibold text-foreground">{renderDeviceName(device)}</p>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <span>
                                     {formatDistanceToNow(new Date(device.createdAt.seconds * 1000), { addSuffix: true, locale: ru })}
@@ -185,7 +191,7 @@ export default function DeviceManager() {
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                Это действие приведет к выходу из сеанса на устройстве '{parseUserAgent(device.userAgent)}'. Это действие нельзя отменить.
+                                Это действие приведет к выходу из сеанса на устройстве '{renderDeviceName(device)}'. Это действие нельзя отменить.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
