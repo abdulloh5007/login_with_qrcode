@@ -63,7 +63,7 @@ export default function Home() {
                 <LoginForm />
               </TabsContent>
               <TabsContent value="qr">
-                 {activeTab === 'qr' && <QrScanner />}
+                 {activeTab === 'qr' && <QrScanner onScanSuccess={(data) => console.log(data)} />}
               </TabsContent>
             </CardContent>
           </Card>

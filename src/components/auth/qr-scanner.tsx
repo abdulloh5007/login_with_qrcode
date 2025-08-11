@@ -5,7 +5,11 @@ import { useRouter } from 'next/navigation';
 import jsQR from 'jsqr';
 import { Loader2, CheckCircle, CameraOff } from 'lucide-react';
 
-export default function QrScanner() {
+interface QrScannerProps {
+    onScanSuccess: (data: string) => void;
+}
+
+export default function QrScanner({ onScanSuccess }: QrScannerProps) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -42,6 +46,7 @@ export default function QrScanner() {
         });
 
         if (code && code.data) {
+          onScanSuccess(code.data);
           const qrBox = {
               x: code.location.topLeftCorner.x,
               y: code.location.topLeftCorner.y,
@@ -55,9 +60,16 @@ export default function QrScanner() {
             stream.getTracks().forEach(track => track.stop());
           }
           cancelAnimationFrame(animationFrameId);
-          setTimeout(() => {
-            router.push('/dashboard');
-          }, 1500);
+
+          if (code.data.includes('/auth/token/')) {
+             setTimeout(() => {
+                router.push(code.data);
+             }, 1500);
+          } else {
+             setTimeout(() => {
+                router.push('/dashboard');
+             }, 1500);
+          }
           return;
         } else {
             setQrCodeBox(null);
@@ -92,7 +104,7 @@ export default function QrScanner() {
       }
       cancelAnimationFrame(animationFrameId);
     };
-  }, [router, scanSuccess]);
+  }, [router, scanSuccess, onScanSuccess]);
 
   return (
     <div className="relative w-full aspect-square bg-muted rounded-lg overflow-hidden flex items-center justify-center mt-6">

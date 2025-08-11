@@ -7,18 +7,18 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import Link from 'next/link';
 
-export default function LoginForm() {
+export default function RegisterForm() {
   const router = useRouter();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock login logic
+    // Mock register logic
     router.push('/dashboard');
   };
 
   return (
     <Card className="border-0 shadow-none">
-      <form onSubmit={handleLogin}>
+      <form onSubmit={handleRegister}>
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
             <Label htmlFor="email">Эл. почта</Label>
@@ -28,13 +28,17 @@ export default function LoginForm() {
             <Label htmlFor="password">Пароль</Label>
             <Input id="password" type="password" required />
           </div>
+           <div className="space-y-2">
+            <Label htmlFor="confirm-password">Подтвердите пароль</Label>
+            <Input id="confirm-password" type="password" required />
+          </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
-          <Button className="w-full bg-accent text-accent-foreground hover:bg-accent/90" type="submit">
-            Войти
+          <Button className="w-full" type="submit">
+            Зарегистрироваться
           </Button>
-          <p className="text-xs text-muted-foreground text-center">
-            Нет аккаунта? <Link href="/register" className="underline text-primary">Зарегистрироваться</Link>
+           <p className="text-xs text-muted-foreground text-center">
+            Уже есть аккаунт? <Link href="/" className="underline text-primary">Войти</Link>
           </p>
         </CardFooter>
       </form>
