@@ -4,7 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { LogOut, SlidersHorizontal, QrCode } from 'lucide-react';
-import QrCodeGenerator from '@/components/dashboard/qr-code-generator';
 import { Separator } from '@/components/ui/separator';
 import QrCodeScannerDialog from '@/components/dashboard/qr-code-scanner-dialog';
 
@@ -37,12 +36,6 @@ export default function DashboardPage() {
             
             <Separator className="my-4" />
 
-             <p className="text-center text-muted-foreground max-w-sm">
-              Или покажите этот QR-код для входа на этом устройстве.
-            </p>
-            <QrCodeGenerator />
-
-            <Separator className="my-4" />
             <div className="w-full flex flex-col items-center gap-2">
                 <p className="text-center text-muted-foreground">
                     Управляйте своими активными сеансами.
