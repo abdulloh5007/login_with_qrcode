@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import LoginQrCode from '@/components/auth/login-qr-code';
-
+ 
 export default function LoginPage() {
   const [activeTab, setActiveTab] = useState('password');
 
