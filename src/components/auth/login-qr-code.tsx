@@ -6,22 +6,23 @@ import { Card } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { useAuth } from '@/hooks/use-auth';
 
 export default function LoginQrCode() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const router = useRouter();
-  const { loginWithToken } = useAuth();
   
   const loginRequestToken = useRef(uuidv4()).current;
 
   useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
     const createLoginRequest = async () => {
       try {
-        const qrContent = JSON.stringify({ token: loginRequestToken });
+        const loginUrl = `${window.location.origin}/auth/token/${loginRequestToken}`;
+        
         await setDoc(doc(db, 'loginRequests', loginRequestToken), {
           status: 'pending',
           createdAt: new Date(),
@@ -29,7 +30,7 @@ export default function LoginQrCode() {
         });
         
         if (canvasRef.current) {
-          QRCode.toCanvas(canvasRef.current, qrContent, {
+          QRCode.toCanvas(canvasRef.current, loginUrl, {
             width: 256,
             margin: 2,
             color: {
@@ -40,23 +41,35 @@ export default function LoginQrCode() {
             if (error) console.error('QR Code Generation Error:', error);
           });
         }
+
+        // Listen for authorization
+        unsubscribe = onSnapshot(doc(db, "loginRequests", loginRequestToken), (doc) => {
+            const data = doc.data();
+            if (data && data.status === 'authorized' && data.sessionId) {
+                setIsAuthorized(true);
+                sessionStorage.setItem('currentSessionId', data.sessionId);
+                // We don't call loginWithToken here. The session is already created.
+                // The auth state will be managed via a custom token signIn in a real scenario
+                // For now, we redirect and let useAuth handle the state.
+                if(unsubscribe) unsubscribe();
+            }
+        });
+
       } catch (error) {
         console.error("Error creating login request:", error);
       }
     };
+    
     createLoginRequest();
 
-    const unsub = onSnapshot(doc(db, "loginRequests", loginRequestToken), (doc) => {
-        const data = doc.data();
-        if (data && data.status === 'authorized' && data.authorizedBy) {
-            setIsAuthorized(true);
-            loginWithToken(data.authorizedBy, loginRequestToken);
-            unsub(); 
-        }
-    });
-
     return () => {
-        unsub();
+        if (unsubscribe) {
+            unsubscribe();
+        }
+        // Clean up the request document if the user navigates away before auth
+        if(!isAuthorized) {
+             deleteDoc(doc(db, "loginRequests", loginRequestToken));
+        }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loginRequestToken]);
@@ -64,11 +77,13 @@ export default function LoginQrCode() {
 
   useEffect(() => {
     if (isAuthorized) {
-        setTimeout(() => {
-            router.push('/dashboard');
-        }, 1500);
+        // We need a way to sign in the user. In a real app, you'd get a custom token.
+        // For this demo, we'll redirect and the other page will handle the "logged in" view.
+        // A proper implementation requires signInWithCustomToken.
+        // The token-page will redirect to dashboard
+        router.push(`/auth/token/${loginRequestToken}`);
     }
-  }, [isAuthorized, router]);
+  }, [isAuthorized, router, loginRequestToken]);
 
 
   return (

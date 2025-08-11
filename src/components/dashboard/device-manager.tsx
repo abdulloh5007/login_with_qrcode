@@ -104,8 +104,7 @@ export default function DeviceManager() {
             </Card>
             {otherDevices.length > 0 && (
                  <div className="mt-6 flex flex-col items-center gap-2">
-                    <Separator />
-                     <p className="text-sm text-muted-foreground text-center max-w-xs pt-6">
+                    <p className="text-sm text-muted-foreground text-center max-w-xs">
                         Если вы не узнаете какое-либо устройство, вы можете завершить все остальные сеансы для безопасности.
                     </p>
                     <AlertDialog>

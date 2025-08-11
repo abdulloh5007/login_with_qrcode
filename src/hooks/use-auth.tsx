@@ -1,9 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, setDoc, deleteDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, getDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -34,8 +34,12 @@ const createSession = async (user: User) => {
 
 const deleteSession = async (user: User | null, sessionId: string | null) => {
     if (user && sessionId) {
-        const sessionRef = doc(db, `users/${user.uid}/sessions`, sessionId);
-        await deleteDoc(sessionRef);
+        try {
+            const sessionRef = doc(db, `users/${user.uid}/sessions`, sessionId);
+            await deleteDoc(sessionRef);
+        } catch (error) {
+            console.error("Error deleting session doc:", error);
+        }
     }
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
 };
@@ -45,12 +49,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const router = useRouter();
+
+  const handleSignOut = useCallback(async () => {
+        await signOut(auth);
+        setUser(null);
+        setCurrentSessionId(null);
+        sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        router.push('/login');
+  }, [router]);
   
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    let sessionListenerUnsubscribe: (() => void) | null = null;
+
+    const authUnsubscribe = onAuthStateChanged(auth, async (user) => {
+      // If listener exists, unsubscribe
+      if (sessionListenerUnsubscribe) {
+        sessionListenerUnsubscribe();
+        sessionListenerUnsubscribe = null;
+      }
+      
       setUser(user);
       if (user) {
         let sessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        
         if (sessionId) {
             const sessionRef = doc(db, `users/${user.uid}/sessions`, sessionId);
             const sessionSnap = await getDoc(sessionRef);
@@ -61,6 +82,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
              sessionId = await createSession(user);
         }
         setCurrentSessionId(sessionId);
+
+        // Listen for remote session termination
+        const sessionRef = doc(db, `users/${user.uid}/sessions`, sessionId);
+        sessionListenerUnsubscribe = onSnapshot(sessionRef, (doc) => {
+            if (!doc.exists()) {
+                console.log('Session terminated remotely. Signing out.');
+                if (sessionListenerUnsubscribe) sessionListenerUnsubscribe(); // cleanup listener before signing out
+                handleSignOut();
+            }
+        });
+
       } else {
         setCurrentSessionId(null);
         sessionStorage.removeItem(SESSION_STORAGE_KEY);
@@ -68,27 +100,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+        authUnsubscribe();
+        if (sessionListenerUnsubscribe) {
+            sessionListenerUnsubscribe();
+        }
+    };
+  }, [handleSignOut]);
 
   const login = async (email: string, pass: string) => {
+    await deleteSession(auth.currentUser, sessionStorage.getItem(SESSION_STORAGE_KEY));
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-    const sessionId = await createSession(userCredential.user);
-    setCurrentSessionId(sessionId);
+    // onAuthStateChanged will handle session creation
     return userCredential;
   };
   
   const register = async (email: string, pass: string) => {
+    await deleteSession(auth.currentUser, sessionStorage.getItem(SESSION_STORAGE_KEY));
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-    const sessionId = await createSession(userCredential.user);
-    setCurrentSessionId(sessionId);
+    // onAuthStateChanged will handle session creation
     return userCredential;
   };
   
   const logout = async () => {
     await deleteSession(user, currentSessionId);
-    await signOut(auth);
-    router.push('/login');
+    await handleSignOut();
   };
 
   const loginWithToken = async (uid: string, loginToken: string) => {
@@ -98,26 +134,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const userDocRef = doc(db, "users", uid);
       const userDoc = await getDoc(userDocRef);
 
-      // We are "faking" a login here by setting the user state.
-      // This is NOT secure for a real app.
       if (auth.currentUser?.uid !== uid) {
-        await signOut(auth); // Sign out any existing user
+        await handleSignOut();
       }
-      
-      // Since we can't create a real session without credentials, we'll manually
-      // create a session document and then push to dashboard. The onAuthStateChanged
-      // listener will then pick up the "logged in" state, but it will be based on a trick.
       
       const tempUser = { uid, email: userDoc.data()?.email || 'QR User' } as User;
       const sessionId = await createSession(tempUser);
       
       const loginRequestRef = doc(db, 'loginRequests', loginToken);
       await setDoc(loginRequestRef, { sessionId: sessionId }, { merge: true });
-
-      // We just set the local state.
+      
+      // Manually set user and session. This is a hack for the demo.
+      // A real signInWithCustomToken would trigger onAuthStateChanged.
       setUser(tempUser);
       setCurrentSessionId(sessionId);
       setLoading(false);
+      router.push('/dashboard');
   };
 
 
@@ -131,7 +163,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     loginWithToken
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
