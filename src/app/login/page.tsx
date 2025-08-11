@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import LoginForm from '@/components/auth/login-form';
-import QrScanner from '@/components/auth/qr-scanner';
 import { QrCode, KeyRound } from 'lucide-react';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import LoginQrCode from '@/components/auth/login-qr-code';
 
 export default function LoginPage() {
   const [activeTab, setActiveTab] = useState('password');
@@ -74,7 +74,7 @@ export default function LoginPage() {
                 <LoginForm />
               </TabsContent>
               <TabsContent value="qr">
-                 {activeTab === 'qr' && <QrScanner onScanSuccess={(data) => console.log(data)} />}
+                 {activeTab === 'qr' && <LoginQrCode />}
               </TabsContent>
             </CardContent>
           </Card>

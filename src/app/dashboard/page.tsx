@@ -1,9 +1,12 @@
+'use client';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { LogOut, SlidersHorizontal } from 'lucide-react';
+import { LogOut, SlidersHorizontal, QrCode } from 'lucide-react';
 import QrCodeGenerator from '@/components/dashboard/qr-code-generator';
 import { Separator } from '@/components/ui/separator';
+import QrCodeScannerDialog from '@/components/dashboard/qr-code-scanner-dialog';
 
 export default function DashboardPage() {
   return (
@@ -25,10 +28,20 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-6 pt-6">
-            <p className="text-center text-muted-foreground max-w-sm">
-              Отсканируйте этот QR-код другим устройством для мгновенного входа.
+            <div className="w-full flex flex-col items-center gap-4">
+               <QrCodeScannerDialog />
+               <p className="text-center text-muted-foreground max-w-xs text-sm">
+                  Используйте сканер, чтобы войти в свою учетную запись на другом устройстве.
+               </p>
+            </div>
+            
+            <Separator className="my-4" />
+
+             <p className="text-center text-muted-foreground max-w-sm">
+              Или покажите этот QR-код для входа на этом устройстве.
             </p>
             <QrCodeGenerator />
+
             <Separator className="my-4" />
             <div className="w-full flex flex-col items-center gap-2">
                 <p className="text-center text-muted-foreground">
@@ -47,5 +60,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

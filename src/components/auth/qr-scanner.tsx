@@ -7,9 +7,10 @@ import { Loader2, CheckCircle, CameraOff } from 'lucide-react';
 
 interface QrScannerProps {
     onScanSuccess: (data: string) => void;
+    onDialogClose?: () => void;
 }
 
-export default function QrScanner({ onScanSuccess }: QrScannerProps) {
+export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerProps) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -17,6 +18,23 @@ export default function QrScanner({ onScanSuccess }: QrScannerProps) {
   const [qrCodeBox, setQrCodeBox] = useState<{ x: number; y: number; width: number; height: number; } | null>(null);
   const [scanSuccess, setScanSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scannedData, setScannedData] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (scanSuccess && scannedData) {
+        // Logic to authorize the device with the scannedData token.
+        // For demonstration, we'll just show success and close the dialog/redirect.
+        console.log("Authorizing device with token:", scannedData);
+        setTimeout(() => {
+            if (onDialogClose) {
+                onDialogClose();
+            }
+            // For a real app, you might not redirect the scanning device,
+            // but for now we'll just confirm it worked.
+        }, 1500);
+    }
+  }, [scanSuccess, scannedData, onDialogClose, router]);
+
 
   useEffect(() => {
     const video = videoRef.current;
@@ -47,6 +65,8 @@ export default function QrScanner({ onScanSuccess }: QrScannerProps) {
 
         if (code && code.data) {
           onScanSuccess(code.data);
+          setScannedData(code.data);
+
           const qrBox = {
               x: code.location.topLeftCorner.x,
               y: code.location.topLeftCorner.y,
@@ -60,16 +80,6 @@ export default function QrScanner({ onScanSuccess }: QrScannerProps) {
             stream.getTracks().forEach(track => track.stop());
           }
           cancelAnimationFrame(animationFrameId);
-
-          if (code.data.includes('/auth/token/')) {
-             setTimeout(() => {
-                router.push(code.data);
-             }, 1500);
-          } else {
-             setTimeout(() => {
-                router.push('/dashboard');
-             }, 1500);
-          }
           return;
         } else {
             setQrCodeBox(null);
@@ -102,9 +112,11 @@ export default function QrScanner({ onScanSuccess }: QrScannerProps) {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
-      cancelAnimationFrame(animationFrameId);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
     };
-  }, [router, scanSuccess, onScanSuccess]);
+  }, [scanSuccess, onScanSuccess]);
 
   return (
     <div className="relative w-full aspect-square bg-muted rounded-lg overflow-hidden flex items-center justify-center mt-6">
@@ -129,8 +141,8 @@ export default function QrScanner({ onScanSuccess }: QrScannerProps) {
       {scanSuccess && (
         <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center transition-opacity duration-500">
           <CheckCircle className="text-green-500 animate-bounce" size={64} />
-          <p className="mt-4 text-lg font-semibold text-foreground">Вход выполнен успешно!</p>
-          <p className="text-sm text-muted-foreground">Перенаправление...</p>
+          <p className="mt-4 text-lg font-semibold text-foreground">Устройство авторизовано!</p>
+          <p className="text-sm text-muted-foreground">Закрытие сканера...</p>
         </div>
       )}
       

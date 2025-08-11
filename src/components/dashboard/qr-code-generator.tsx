@@ -15,7 +15,8 @@ export default function QrCodeGenerator() {
 
   useEffect(() => {
     if (canvasRef.current && baseUrl) {
-      // Mock user-specific login token
+      // This QR now represents a login token for THIS device/session.
+      // An already authenticated device can scan this to log this device in.
       const loginToken = `qr-auth-token-${Date.now()}-${Math.random()}`;
       const loginUrl = `${baseUrl}/auth/token/${loginToken}`;
       
@@ -23,8 +24,8 @@ export default function QrCodeGenerator() {
         width: 256,
         margin: 2,
         color: {
-            dark: '#000000', // Black
-            light: '#00000000' // Transparent
+            dark: '#000000', 
+            light: '#FFFFFF'
         }
       }, (error) => {
         if (error) console.error(error);
