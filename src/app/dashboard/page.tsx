@@ -11,7 +11,7 @@ export default function DashboardPage() {
       <div className="w-full max-w-2xl relative">
         <header className="absolute -top-16 right-0 sm:top-4 sm:right-4">
           <Button variant="ghost" asChild>
-            <Link href="/">
+            <Link href="/login">
               <LogOut className="mr-2 h-4 w-4" />
               Выйти
             </Link>
@@ -47,3 +47,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

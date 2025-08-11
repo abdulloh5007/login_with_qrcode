@@ -38,10 +38,12 @@ export default function RegisterForm() {
             Зарегистрироваться
           </Button>
            <p className="text-xs text-muted-foreground text-center">
-            Уже есть аккаунт? <Link href="/" className="underline text-primary">Войти</Link>
+            Уже есть аккаунт? <Link href="/login" className="underline text-primary">Войти</Link>
           </p>
         </CardFooter>
       </form>
     </Card>
   );
 }
+
+    

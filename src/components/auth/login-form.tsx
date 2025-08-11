@@ -30,7 +30,7 @@ export default function LoginForm() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
-          <Button className="w-full bg-accent text-accent-foreground hover:bg-accent/90" type="submit">
+          <Button className="w-full" type="submit">
             Войти
           </Button>
           <p className="text-xs text-muted-foreground text-center">
@@ -41,3 +41,5 @@ export default function LoginForm() {
     </Card>
   );
 }
+
+    
