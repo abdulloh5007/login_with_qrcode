@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, setDoc, deleteDoc, onSnapshot, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -72,47 +72,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const sessionToClean = sessionStorage.getItem(SESSION_STORAGE_KEY);
     await cleanupSession(userToClean, sessionToClean);
     await signOut(auth);
-  }, []);
+    router.push('/login');
+  }, [router]);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (newUser) => {
         setUser(newUser);
-        setLoading(true);
-
         if (newUser) {
-            let sessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
-            // If there's a session ID, verify it exists in Firestore.
-            if (sessionId) {
-                const sessionRef = doc(db, `users/${newUser.uid}/sessions`, sessionId);
-                const sessionSnap = await getDoc(sessionRef);
-                if (!sessionSnap.exists()) {
-                    // The session stored in browser doesn't exist in DB, so clear it.
-                    sessionId = null;
-                    sessionStorage.removeItem(SESSION_STORAGE_KEY);
-                }
-            }
-            
-            // If there's no valid session ID, it means this is a new login. Create one.
-            if (!sessionId) {
-                const newSessionId = await createSession(newUser);
-                setCurrentSessionId(newSessionId);
-            } else {
-                setCurrentSessionId(sessionId);
-            }
+            const sessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
+            setCurrentSessionId(sessionId);
         } else {
-            // User signed out, clear local state
-            sessionStorage.removeItem(SESSION_STORAGE_KEY);
             setCurrentSessionId(null);
-            const protectedRoutes = ['/dashboard'];
-            if(protectedRoutes.some(path => window.location.pathname.startsWith(path))) {
-                router.push('/login');
-            }
+            sessionStorage.removeItem(SESSION_STORAGE_KEY);
         }
         setLoading(false);
     });
 
     return () => unsubscribeAuth();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -121,6 +97,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const sessionRef = doc(db, `users/${user.uid}/sessions`, currentSessionId);
         unsubscribeSession = onSnapshot(sessionRef, (doc) => {
             if (!doc.exists()) {
+                // Session was terminated remotely, sign out
                 handleSignOut();
             }
         });
@@ -133,8 +110,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user, currentSessionId, handleSignOut]);
 
   const login = async (email: string, pass: string) => {
-    await signInWithEmailAndPassword(auth, email, pass);
-    // Session creation is now handled by onAuthStateChanged to prevent race conditions.
+    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    await createSession(userCredential.user);
   };
   
   const register = async (email: string, pass: string) => {
@@ -143,7 +120,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email: userCredential.user.email,
         createdAt: serverTimestamp()
      });
-     // Session creation is now handled by onAuthStateChanged.
+     await createSession(userCredential.user);
   };
 
   const logout = useCallback(async () => {
