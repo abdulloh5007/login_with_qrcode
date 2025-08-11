@@ -69,28 +69,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const handleSignOut = useCallback(async () => {
     await signOut(auth);
-    // onAuthStateChanged will handle state cleanup
   }, []);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (newUser) => {
-        setLoading(true);
-        setUser(newUser);
-
         if (newUser) {
+            setUser(newUser);
             let sessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
+            
             if (sessionId) {
-                // Verify session exists
+                // Verify session exists and belongs to this user
                 const sessionRef = doc(db, `users/${newUser.uid}/sessions`, sessionId);
                 const sessionSnap = await getDoc(sessionRef);
                 if (!sessionSnap.exists()) {
-                    sessionId = null; // Session is invalid
+                    sessionId = null; // Session is invalid, create a new one
                 }
             }
-            setCurrentSessionId(sessionId);
+
+            if (!sessionId) {
+                // This is a new login or the previous session was invalid
+                const newSessionId = await createSession(newUser);
+                setCurrentSessionId(newSessionId);
+            } else {
+                setCurrentSessionId(sessionId);
+            }
+
         } else {
+            // User signed out
+            await cleanupSession(user, currentSessionId);
+            setUser(null);
             setCurrentSessionId(null);
-            sessionStorage.removeItem(SESSION_STORAGE_KEY);
             const protectedRoutes = ['/dashboard'];
             if(protectedRoutes.some(path => window.location.pathname.startsWith(path))) {
                 router.push('/login');
@@ -100,7 +108,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     return () => unsubscribeAuth();
-  }, [router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let unsubscribeSession: (() => void) | null = null;
@@ -108,7 +117,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const sessionRef = doc(db, `users/${user.uid}/sessions`, currentSessionId);
         unsubscribeSession = onSnapshot(sessionRef, (doc) => {
             if (!doc.exists()) {
-                // Session was terminated remotely
+                // Session was terminated remotely, sign out this client
                 handleSignOut();
             }
         });
@@ -121,9 +130,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user, currentSessionId, handleSignOut]);
 
   const login = async (email: string, pass: string) => {
-    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-    const newSessionId = await createSession(userCredential.user);
-    setCurrentSessionId(newSessionId);
+    // Session creation is now handled by onAuthStateChanged
+    await signInWithEmailAndPassword(auth, email, pass);
   };
   
   const register = async (email: string, pass: string) => {
@@ -132,14 +140,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email: userCredential.user.email,
         createdAt: serverTimestamp()
      });
-     const newSessionId = await createSession(userCredential.user);
-     setCurrentSessionId(newSessionId);
+     // Session creation is handled by onAuthStateChanged
   };
 
   const logout = useCallback(async () => {
-    await cleanupSession(user, currentSessionId);
+    // handleSignOut will trigger onAuthStateChanged, which handles cleanup
     await handleSignOut();
-  }, [user, currentSessionId, handleSignOut]);
+  }, [handleSignOut]);
   
   const value = {
     user,
