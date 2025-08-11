@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Smartphone, Monitor, Tablet, Trash2, ShieldCheck } from 'lucide-react';
+import { Smartphone, Monitor, Tablet, Trash2, ShieldCheck, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { db } from '@/lib/firebase';
-import { collection, query, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { formatDistanceToNow } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
@@ -21,9 +21,32 @@ type Device = {
   };
 };
 
+const parseUserAgent = (ua: string) => {
+    let browser = 'Неизвестный браузер';
+    let os = 'Неизвестная ОС';
+
+    // OS detection
+    if (ua.includes('Windows NT')) os = 'Windows';
+    else if (ua.includes('Mac OS X')) os = 'macOS';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+    else if (ua.includes('Linux')) os = 'Linux';
+
+    // Browser detection
+    if (ua.includes('Chrome') && !ua.includes('Chromium')) browser = 'Chrome';
+    else if (ua.includes('Firefox')) browser = 'Firefox';
+    else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+    else if (ua.includes('MSIE') || ua.includes('Trident/')) browser = 'Internet Explorer';
+    else if (ua.includes('Edge')) browser = 'Edge';
+
+    return `${browser} на ${os}`;
+};
+
+
 const getDeviceType = (userAgent: string): 'mobile' | 'desktop' | 'tablet' => {
-    if (/mobile/i.test(userAgent)) return 'mobile';
-    if (/tablet/i.test(userAgent)) return 'tablet';
+    const lowerUa = userAgent.toLowerCase();
+    if (/mobile/.test(lowerUa) || /iphone/.test(lowerUa) || /android/.test(lowerUa)) return 'mobile';
+    if (/tablet/.test(lowerUa) || /ipad/.test(lowerUa)) return 'tablet';
     return 'desktop';
 };
 
@@ -68,6 +91,16 @@ export default function DeviceManager() {
     const sessionRef = doc(db, `users/${user.uid}/sessions`, sessionId);
     await deleteDoc(sessionRef);
   };
+  
+  const handleTerminateAllOtherSessions = async () => {
+    if (!user) return;
+    const batch = writeBatch(db);
+    otherDevices.forEach(device => {
+        const sessionRef = doc(db, `users/${user.uid}/sessions`, device.id);
+        batch.delete(sessionRef);
+    });
+    await batch.commit();
+  }
 
   return (
     <div className="w-full space-y-6 pt-4">
@@ -79,7 +112,7 @@ export default function DeviceManager() {
                 <div className="flex items-center gap-4">
                   {getDeviceIcon(getDeviceType(currentDevice.userAgent))}
                   <div>
-                    <p className="font-semibold text-foreground">{currentDevice.userAgent}</p>
+                    <p className="font-semibold text-foreground">{parseUserAgent(currentDevice.userAgent)}</p>
                     <div className="flex items-center gap-2 text-sm text-green-500">
                         <ShieldCheck className="h-4 w-4" />
                         <span>Это устройство</span>
@@ -88,9 +121,40 @@ export default function DeviceManager() {
                 </div>
               </CardContent>
             </Card>
-            {otherDevices.length > 0 && <Separator className='my-6'/>}
           </div>
         )}
+
+      {otherDevices.length > 0 && (
+        <>
+            <div className="flex justify-end">
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" className="w-full max-w-xs">
+                            Завершить все другие сеансы
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                        Это действие приведет к выходу из всех других сеансов. Вам нужно будет снова войти на этих устройствах.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Отмена</AlertDialogCancel>
+                        <AlertDialogAction
+                        onClick={handleTerminateAllOtherSessions}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                        Завершить сеансы
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </div>
+            <Separator className='my-6'/>
+        </>
+      )}
 
       {otherDevices.length > 0 && (
         <div>
@@ -103,7 +167,7 @@ export default function DeviceManager() {
                         <div className="flex items-center gap-4">
                         {getDeviceIcon(getDeviceType(device.userAgent))}
                         <div>
-                            <p className="font-semibold text-foreground">{device.userAgent}</p>
+                            <p className="font-semibold text-foreground">{parseUserAgent(device.userAgent)}</p>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <span>
                                     {formatDistanceToNow(new Date(device.createdAt.seconds * 1000), { addSuffix: true, locale: ru })}
@@ -121,7 +185,7 @@ export default function DeviceManager() {
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                Это действие приведет к выходу из сеанса на устройстве '{device.userAgent}'. Это действие нельзя отменить.
+                                Это действие приведет к выходу из сеанса на устройстве '{parseUserAgent(device.userAgent)}'. Это действие нельзя отменить.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -142,6 +206,13 @@ export default function DeviceManager() {
             </ul>
         </div>
       )}
+
+       {devices.length === 0 && !currentDevice && (
+         <div className="text-center text-muted-foreground py-8">
+            <HelpCircle className="mx-auto h-12 w-12" />
+            <p className="mt-4">Нет активных сеансов.</p>
+         </div>
+       )}
     </div>
   );
 }
