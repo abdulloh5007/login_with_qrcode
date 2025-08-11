@@ -80,7 +80,7 @@ export default function QrScanner() {
       } catch (err) {
         console.error("Error accessing camera: ", err);
         setLoading(false);
-        setError("Could not access camera. Please grant camera permissions in your browser settings.");
+        setError("Не удалось получить доступ к камере. Пожалуйста, предоставьте права доступа к камере в настройках вашего браузера.");
       }
     };
 
@@ -117,15 +117,15 @@ export default function QrScanner() {
       {scanSuccess && (
         <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center transition-opacity duration-500">
           <CheckCircle className="text-green-500 animate-bounce" size={64} />
-          <p className="mt-4 text-lg font-semibold text-foreground">Login Successful!</p>
-          <p className="text-sm text-muted-foreground">Redirecting...</p>
+          <p className="mt-4 text-lg font-semibold text-foreground">Вход выполнен успешно!</p>
+          <p className="text-sm text-muted-foreground">Перенаправление...</p>
         </div>
       )}
       
       {error && !loading && (
           <div className="absolute inset-0 bg-muted flex flex-col items-center justify-center p-4 text-center">
               <CameraOff className="text-destructive mb-4" size={48} />
-              <p className="text-destructive font-semibold">Camera Error</p>
+              <p className="text-destructive font-semibold">Ошибка камеры</p>
               <p className="text-sm text-muted-foreground">{error}</p>
           </div>
       )}

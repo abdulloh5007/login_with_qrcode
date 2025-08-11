@@ -1,8 +1,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { LogOut } from 'lucide-react';
+import { LogOut, SlidersHorizontal } from 'lucide-react';
 import QrCodeGenerator from '@/components/dashboard/qr-code-generator';
+import { Separator } from '@/components/ui/separator';
 
 export default function DashboardPage() {
   return (
@@ -12,22 +13,34 @@ export default function DashboardPage() {
           <Button variant="ghost" asChild>
             <Link href="/">
               <LogOut className="mr-2 h-4 w-4" />
-              Logout
+              Выйти
             </Link>
           </Button>
         </header>
         <Card className="shadow-2xl rounded-xl border-2">
           <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-headline">Welcome to QRAuth</CardTitle>
+            <CardTitle className="text-3xl font-headline">Добро пожаловать в QRAuth</CardTitle>
             <CardDescription>
-              Your personal dashboard.
+              Ваша личная панель управления.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-6 pt-6">
             <p className="text-center text-muted-foreground max-w-sm">
-              Scan this QR code with another device to log in instantly.
+              Отсканируйте этот QR-код другим устройством для мгновенного входа.
             </p>
             <QrCodeGenerator />
+            <Separator className="my-4" />
+            <div className="w-full flex flex-col items-center gap-2">
+                <p className="text-center text-muted-foreground">
+                    Управляйте своими активными сеансами.
+                </p>
+                <Button asChild>
+                    <Link href="/dashboard/devices">
+                        <SlidersHorizontal className="mr-2 h-4 w-4" />
+                        Управление устройствами
+                    </Link>
+                </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -20,20 +20,20 @@ export default function LoginForm() {
       <form onSubmit={handleLogin}>
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">Эл. почта</Label>
             <Input id="email" type="email" placeholder="m@example.com" required />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">Пароль</Label>
             <Input id="password" type="password" required />
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <Button className="w-full bg-accent text-accent-foreground hover:bg-accent/90" type="submit">
-            Sign In
+            Войти
           </Button>
           <p className="text-xs text-muted-foreground text-center">
-            Don't have an account? <a href="#" className="underline text-primary">Sign up</a>
+            Нет аккаунта? <a href="#" className="underline text-primary">Зарегистрироваться</a>
           </p>
         </CardFooter>
       </form>

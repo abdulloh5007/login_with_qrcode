@@ -45,18 +45,18 @@ export default function Home() {
               </div>
               <CardTitle className="text-3xl font-headline">QRAuth</CardTitle>
               <CardDescription>
-                Sign in to your account
+                Войдите в свою учетную запись
               </CardDescription>
             </CardHeader>
             <CardContent>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="password">
                   <KeyRound className="mr-2 h-4 w-4" />
-                  Password
+                  Пароль
                 </TabsTrigger>
                 <TabsTrigger value="qr">
                   <QrCode className="mr-2 h-4 w-4" />
-                  QR Code
+                  QR-код
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="password">
