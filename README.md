@@ -1,5 +1,5 @@
-# Firebase Studio
+# Test project login with QR-code 
 
-This is a NextJS starter in Firebase Studio.
+Getting started with Firebase Database
 
-To get started, take a look at src/app/page.tsx.
+Database uzscoin.clicker@gmail.com
