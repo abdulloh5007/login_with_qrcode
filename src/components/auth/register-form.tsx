@@ -9,25 +9,73 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import zxcvbn from 'zxcvbn';
 
-const PasswordStrengthIndicator = ({ score, feedback }: { score: number; feedback: any }) => {
+const checkPasswordStrength = (password: string): {level: number, label: string, suggestions: string[]} => {
+    let typesCount = 0;
+    const suggestions: string[] = [];
+
+    const hasLowercase = /[a-z]/.test(password);
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasDigits = /[0-9]/.test(password);
+    const hasSpecial = /[^a-zA-Z0-9]/.test(password);
+
+    if (hasLowercase) typesCount++;
+    if (hasUppercase) typesCount++;
+    if (hasDigits) typesCount++;
+    if (hasSpecial) typesCount++;
+
+    let level = typesCount;
+    let label = "";
+
+    if (level === 1) label = "Слабый";
+    else if (level === 2) label = "Нормальный";
+    else if (level === 3) label = "Хороший";
+    else if (level === 4 && password.length > 8) label = "Сложный";
+    else if (level === 4) {
+      level = 3; // Downgrade level if length is not sufficient
+      label = "Хороший";
+    }
+    else {
+      level = 1;
+      label = "Слабый"
+    }
+
+
+    if (level < 4) {
+        if (!hasLowercase) suggestions.push("Добавьте маленькие буквы");
+        if (!hasUppercase) suggestions.push("Добавьте большие буквы");
+        if (!hasDigits) suggestions.push("Добавьте цифры");
+        if (!hasSpecial) suggestions.push("Добавьте спецсимвол");
+        if (password.length <= 8) suggestions.push("Сделайте пароль длиннее 8 символов");
+    }
+
+    if (level > 4) level = 4;
+    if (level === 4 && password.length > 8) {
+        label = "Сложный";
+        suggestions.length = 0;
+    }
+
+    return { level, label, suggestions };
+};
+
+
+const PasswordStrengthIndicator = ({ strength }: { strength: {level: number, label: string, suggestions: string[]} }) => {
     const strengthLevels = [
-        { label: "Слабый", color: "bg-red-500", width: "w-1/4" },
-        { label: "Нормальный", color: "bg-orange-500", width: "w-2/4" },
-        { label: "Хороший", color: "bg-yellow-500", width: "w-3/4" },
-        { label: "Сложный", color: "bg-green-500", width: "w-full" }
+        { label: "Очень слабый", color: "bg-red-700" }, // level 0, shouldn't happen
+        { label: "Слабый", color: "bg-red-500" }, // level 1
+        { label: "Нормальный", color: "bg-orange-500" }, // level 2
+        { label: "Хороший", color: "bg-yellow-500" }, // level 3
+        { label: "Сложный", color: "bg-green-500" } // level 4
     ];
 
-    const currentStrength = strengthLevels[score] || strengthLevels[0];
+    const currentStrength = strengthLevels[strength.level] || strengthLevels[0];
 
     return (
         <div className="space-y-2">
-            <Progress value={(score + 1) * 25} className={`h-2 ${currentStrength.color}`} />
+            <Progress value={strength.level * 25} className={`h-2 ${currentStrength.color}`} />
             <p className="text-xs text-muted-foreground">
                 <span className="font-semibold">{currentStrength.label}.</span>
-                {feedback?.warning && <span className="ml-1">{feedback.warning}</span>}
-                {feedback?.suggestions?.length > 0 && <span className="ml-1">{feedback.suggestions[0]}</span>}
+                {strength.suggestions.length > 0 && <span className="ml-1">{strength.suggestions.join(' ')}</span>}
             </p>
         </div>
     );
@@ -37,7 +85,7 @@ const PasswordStrengthIndicator = ({ score, feedback }: { score: number; feedbac
 export default function RegisterForm() {
   const router = useRouter();
   const [password, setPassword] = useState('');
-  const [passwordStrength, setPasswordStrength] = useState({ score: 0, feedback: null });
+  const [passwordStrength, setPasswordStrength] = useState({ level: 0, label: '', suggestions: [] });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -52,13 +100,10 @@ export default function RegisterForm() {
       const newPassword = e.target.value;
       setPassword(newPassword);
       if (newPassword) {
-          const result = zxcvbn(newPassword);
-          setPasswordStrength({
-              score: result.score,
-              feedback: result.feedback as any,
-          });
+          const result = checkPasswordStrength(newPassword);
+          setPasswordStrength(result);
       } else {
-          setPasswordStrength({ score: 0, feedback: null });
+          setPasswordStrength({ level: 0, label: '', suggestions: [] });
       }
   };
 
@@ -91,7 +136,7 @@ export default function RegisterForm() {
                     {showPassword ? <EyeOff /> : <Eye />}
                  </Button>
             </div>
-            {password && <PasswordStrengthIndicator score={passwordStrength.score} feedback={passwordStrength.feedback} />}
+            {password && <PasswordStrengthIndicator strength={passwordStrength} />}
           </div>
            <div className="space-y-2">
             <Label htmlFor="confirm-password">Подтвердите пароль</Label>
