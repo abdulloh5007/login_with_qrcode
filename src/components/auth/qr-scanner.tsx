@@ -26,14 +26,10 @@ export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerPro
 
 
   const handleAuthorizeToken = async (qrData: string) => {
-    setLoading(true);
-    let token;
-    try {
-        const parsedData = JSON.parse(qrData);
-        token = parsedData.token;
-        if (!token) throw new Error("Invalid QR data");
-    } catch (e) {
-        setError('Неверный формат QR-кода.');
+    // The previous implementation was parsing JSON, but the qr code only contains the token string.
+    const token = qrData;
+    if (!token) {
+       setError('Неверный формат QR-кода.');
         toast({
             variant: 'destructive',
             title: 'Неверный QR-код',
@@ -55,6 +51,7 @@ export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerPro
                 status: "authorized",
                 authorizedAt: new Date(),
                 authorizedBy: user.uid,
+                sessionId: user.uid // a placeholder, actual session is created on the other device
             });
             setScanSuccess(true);
             if (onScanSuccess) {
@@ -126,8 +123,10 @@ export default function QrScanner({ onScanSuccess, onDialogClose }: QrScannerPro
             stream.getTracks().forEach(track => track.stop());
           }
           cancelAnimationFrame(animationFrameId);
-
-          handleAuthorizeToken(code.data);
+          
+          setTimeout(() => {
+            handleAuthorizeToken(code.data);
+          }, 2000); // Wait 2 seconds before authorizing
           
           return;
         } else {
