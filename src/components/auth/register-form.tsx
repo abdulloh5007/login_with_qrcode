@@ -91,6 +91,7 @@ export default function RegisterForm() {
   const [passwordStrength, setPasswordStrength] = useState({ level: 0, has: {} });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -103,6 +104,7 @@ export default function RegisterForm() {
       });
       return;
     }
+    setIsLoading(true);
     try {
       await register(email, password);
       router.push('/dashboard');
@@ -112,6 +114,8 @@ export default function RegisterForm() {
         title: 'Ошибка регистрации',
         description: error.message,
       });
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -128,7 +132,7 @@ export default function RegisterForm() {
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
             <Label htmlFor="email">Эл. почта</Label>
-            <Input id="email" type="email" placeholder="m@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input id="email" type="email" placeholder="m@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} disabled={isLoading}/>
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Пароль</Label>
@@ -139,6 +143,7 @@ export default function RegisterForm() {
                     required
                     value={password}
                     onChange={handlePasswordChange}
+                    disabled={isLoading}
                  />
                  <Button
                     type="button"
@@ -146,6 +151,7 @@ export default function RegisterForm() {
                     size="icon"
                     className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
                     onClick={() => setShowPassword(!showPassword)}
+                    disabled={isLoading}
                  >
                     {showPassword ? <EyeOff /> : <Eye />}
                  </Button>
@@ -161,6 +167,7 @@ export default function RegisterForm() {
                   required 
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={isLoading}
                 />
                  <Button
                     type="button"
@@ -168,6 +175,7 @@ export default function RegisterForm() {
                     size="icon"
                     className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    disabled={isLoading}
                  >
                     {showConfirmPassword ? <EyeOff /> : <Eye />}
                  </Button>
@@ -175,8 +183,8 @@ export default function RegisterForm() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
-          <Button className="w-full" type="submit" disabled={passwordStrength.level < 4}>
-            Зарегистрироваться
+          <Button className="w-full" type="submit" disabled={isLoading || passwordStrength.level < 4}>
+            {isLoading ? 'Регистрация...' : 'Зарегистрироваться'}
           </Button>
            <p className="text-xs text-muted-foreground text-center">
             Уже есть аккаунт? <Link href="/login" className="underline text-primary">Войти</Link>

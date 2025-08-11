@@ -1,9 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, setDoc, deleteDoc, getDoc, onSnapshot, serverTimestamp, collection } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -11,8 +11,8 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   currentSessionId: string | null;
-  login: (email: string, pass: string) => Promise<any>;
-  register: (email: string, pass: string) => Promise<any>;
+  login: (email: string, pass: string) => Promise<void>;
+  register: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -49,55 +49,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const router = useRouter();
-  const activeListeners = useRef<{ auth: (() => void) | null, session: (() => void) | null }>({ auth: null, session: null });
 
-
-  const handleLogout = useCallback(async () => {
-    await cleanupSession(auth.currentUser, sessionStorage.getItem(SESSION_STORAGE_KEY));
-    await signOut(auth);
-    setCurrentSessionId(null);
-    setUser(null);
-    router.push('/login');
-  }, [router]);
-  
   useEffect(() => {
-    if (activeListeners.current.auth) activeListeners.current.auth();
-
-    activeListeners.current.auth = onAuthStateChanged(auth, async (newUser) => {
-        if (activeListeners.current.session) {
-            activeListeners.current.session();
-            activeListeners.current.session = null;
-        }
+    const unsubscribeAuth = onAuthStateChanged(auth, (newUser) => {
+        setUser(newUser);
 
         if (newUser) {
-            setUser(newUser);
-            let sessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
-
-            if (sessionId) {
-                const sessionRef = doc(db, `users/${newUser.uid}/sessions`, sessionId);
-                const sessionSnap = await getDoc(sessionRef);
-                if (!sessionSnap.exists()) {
-                    // The previous session is invalid or was terminated, create a new one.
-                    sessionId = await createSession(newUser);
-                }
-            } else {
-                 // No session exists, create a new one.
-                 sessionId = await createSession(newUser);
-            }
-            
-            setCurrentSessionId(sessionId);
-
-            // Listen for remote termination of the current session.
-            const sessionRef = doc(db, `users/${newUser.uid}/sessions`, sessionId);
-            activeListeners.current.session = onSnapshot(sessionRef, (doc) => {
-                if (!doc.exists()) {
-                    // The session was deleted from another device.
-                    signOut(auth);
-                }
-            });
+            // User is signed in.
+            const sessionIdFromStorage = sessionStorage.getItem(SESSION_STORAGE_KEY);
+            setCurrentSessionId(sessionIdFromStorage);
         } else {
             // User is signed out.
-            setUser(null);
             setCurrentSessionId(null);
             sessionStorage.removeItem(SESSION_STORAGE_KEY);
             const protectedRoutes = ['/dashboard'];
@@ -106,19 +68,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
         }
         setLoading(false);
-    }, (error) => {
-        console.error("Auth state error:", error);
-        setLoading(false);
     });
 
-    return () => {
-        if (activeListeners.current.auth) activeListeners.current.auth();
-        if (activeListeners.current.session) activeListeners.current.session();
-    };
+    return () => unsubscribeAuth();
   }, [router]);
 
+  useEffect(() => {
+    let unsubscribeSession: (() => void) | null = null;
+
+    if (user && currentSessionId) {
+        const sessionRef = doc(db, `users/${user.uid}/sessions`, currentSessionId);
+        unsubscribeSession = onSnapshot(sessionRef, (doc) => {
+            if (!doc.exists()) {
+                // The session was deleted from another device.
+                signOut(auth);
+            }
+        });
+    }
+
+    return () => {
+        if (unsubscribeSession) {
+            unsubscribeSession();
+        }
+    };
+  }, [user, currentSessionId]);
+
   const login = async (email: string, pass: string) => {
-    return await signInWithEmailAndPassword(auth, email, pass);
+    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    await createSession(userCredential.user);
   };
   
   const register = async (email: string, pass: string) => {
@@ -127,8 +104,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email: userCredential.user.email,
         createdAt: serverTimestamp()
      });
-     return userCredential;
+     await createSession(userCredential.user);
   };
+
+  const logout = useCallback(async () => {
+    await cleanupSession(user, currentSessionId);
+    await signOut(auth);
+    // onAuthStateChanged will handle the state updates
+  }, [user, currentSessionId]);
   
   const value = {
     user,
@@ -136,7 +119,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     currentSessionId,
     login,
     register,
-    logout: handleLogout
+    logout,
   };
 
   return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
