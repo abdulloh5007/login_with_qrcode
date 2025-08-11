@@ -6,12 +6,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import LoginForm from '@/components/auth/login-form';
 import QrScanner from '@/components/auth/qr-scanner';
 import { QrCode, KeyRound } from 'lucide-react';
+import { ThemeSwitcher } from '@/components/theme-switcher';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('password');
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+      <div className="absolute top-4 right-4">
+        <ThemeSwitcher />
+      </div>
       <div className="w-full max-w-md">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <Card className="shadow-2xl rounded-xl border-2">
