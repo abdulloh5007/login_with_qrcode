@@ -95,40 +95,42 @@ export default function DeviceManager() {
                 )}
               </CardContent>
             </Card>
+            {device.isCurrent && (
+                <div className="mt-6 flex flex-col items-center gap-2">
+                    <Separator />
+                     <p className="text-sm text-muted-foreground text-center max-w-xs pt-6">
+                        Если вы не узнаете какое-либо устройство, вы можете завершить все остальные сеансы для безопасности.
+                    </p>
+                    <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" className="w-full max-w-xs">
+                        <ShieldAlert className="mr-2 h-4 w-4" />
+                        Завершить все другие сеансы
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                        <AlertDialogTitle>Завершить все другие сеансы?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Вы выйдете из системы на всех устройствах, кроме текущего. Это поможет защитить вашу учетную запись, если вы считаете, что она была скомпрометирована.
+                        </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                        <AlertDialogCancel>Отмена</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleTerminateAllOtherSessions}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Завершить все
+                        </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                    </AlertDialog>
+                </div>
+            )}
           </li>
         ))}
       </ul>
-      <Separator />
-      <div className="flex flex-col items-center gap-2">
-        <p className="text-sm text-muted-foreground text-center max-w-xs">
-          Если вы не узнаете какое-либо устройство, вы можете завершить все остальные сеансы для безопасности.
-        </p>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="destructive" className="w-full max-w-xs">
-              <ShieldAlert className="mr-2 h-4 w-4" />
-              Завершить все другие сеансы
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Завершить все другие сеансы?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Вы выйдете из системы на всех устройствах, кроме текущего. Это поможет защитить вашу учетную запись, если вы считаете, что она была скомпрометирована.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Отмена</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleTerminateAllOtherSessions}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Завершить все
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
     </div>
   );
 }
