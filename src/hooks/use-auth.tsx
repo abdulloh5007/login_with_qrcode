@@ -51,53 +51,71 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
 
   const handleSignOut = useCallback(async () => {
+        // The onAuthStateChanged listener will handle cleaning up session state
+        // and redirecting, so we just need to sign out here.
         await signOut(auth);
-        setUser(null);
-        setCurrentSessionId(null);
-        sessionStorage.removeItem(SESSION_STORAGE_KEY);
-        router.push('/login');
-  }, [router]);
+  }, []);
   
   useEffect(() => {
     let sessionListenerUnsubscribe: (() => void) | null = null;
 
-    const authUnsubscribe = onAuthStateChanged(auth, async (user) => {
+    const authUnsubscribe = onAuthStateChanged(auth, async (newUser) => {
       // If listener exists, unsubscribe
       if (sessionListenerUnsubscribe) {
         sessionListenerUnsubscribe();
         sessionListenerUnsubscribe = null;
       }
       
-      setUser(user);
-      if (user) {
+      setUser(newUser);
+
+      if (newUser) {
         let sessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
         
-        if (sessionId) {
-            const sessionRef = doc(db, `users/${user.uid}/sessions`, sessionId);
+        // If there's no session ID or the current user changed, create a new session
+        if (!sessionId || auth.currentUser?.uid !== user?.uid) {
+            sessionId = await createSession(newUser);
+        } else {
+            const sessionRef = doc(db, `users/${newUser.uid}/sessions`, sessionId);
             const sessionSnap = await getDoc(sessionRef);
             if (!sessionSnap.exists()) {
-                sessionId = await createSession(user);
+                sessionId = await createSession(newUser);
             }
-        } else {
-             sessionId = await createSession(user);
         }
+        
         setCurrentSessionId(sessionId);
 
         // Listen for remote session termination
-        const sessionRef = doc(db, `users/${user.uid}/sessions`, sessionId);
+        const sessionRef = doc(db, `users/${newUser.uid}/sessions`, sessionId);
         sessionListenerUnsubscribe = onSnapshot(sessionRef, (doc) => {
             if (!doc.exists()) {
                 console.log('Session terminated remotely. Signing out.');
-                if (sessionListenerUnsubscribe) sessionListenerUnsubscribe(); // cleanup listener before signing out
-                handleSignOut();
+                if (sessionListenerUnsubscribe) sessionListenerUnsubscribe();
+                signOut(auth); // This will trigger onAuthStateChanged to clean up
             }
         });
 
       } else {
-        setCurrentSessionId(null);
+        // User is signed out, clean up session
+        const oldSessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        if (user && oldSessionId) {
+            await deleteDoc(doc(db, `users/${user.uid}/sessions`, oldSessionId)).catch(e => console.error("Could not clean up session on logout", e));
+        }
         sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        setCurrentSessionId(null);
+        if (router) {
+            // Check if current page is protected before pushing to login
+            const protectedRoutes = ['/dashboard'];
+            if(protectedRoutes.some(path => window.location.pathname.startsWith(path))) {
+                router.push('/login');
+            }
+        }
       }
       setLoading(false);
+      // Previous user state for comparison
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, (error) => {
+        console.error("Auth state error:", error);
+        setLoading(false);
     });
 
     return () => {
@@ -106,20 +124,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             sessionListenerUnsubscribe();
         }
     };
-  }, [handleSignOut]);
+  }, [router]);
 
   const login = async (email: string, pass: string) => {
-    await deleteSession(auth.currentUser, sessionStorage.getItem(SESSION_STORAGE_KEY));
-    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-    // onAuthStateChanged will handle session creation
-    return userCredential;
+    // onAuthStateChanged will handle session creation, so we just sign in.
+    return await signInWithEmailAndPassword(auth, email, pass);
   };
   
   const register = async (email: string, pass: string) => {
-    await deleteSession(auth.currentUser, sessionStorage.getItem(SESSION_STORAGE_KEY));
-    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-    // onAuthStateChanged will handle session creation
-    return userCredential;
+    // onAuthStateChanged will handle session creation.
+    return await createUserWithEmailAndPassword(auth, email, pass);
   };
   
   const logout = async () => {
